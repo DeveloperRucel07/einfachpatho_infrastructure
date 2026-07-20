@@ -1,0 +1,58 @@
+#!/bin/bash
+
+set -e
+
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0;0m'
+
+log_info() { echo -e "${BLUE}[INFO] $(date +'%Y-%m-%d %H:%M:%S') - $1${NC}"; }
+log_success() { echo -e "${GREEN}[SUCCESS] $1${NC}"; }
+log_error() { echo -e "${RED}[ERROR] $1${NC}"; }
+
+
+if [ ! -f "docker-compose.yml" ]; then
+    log_error "Erreur : Le fichier docker-compose.yml est introuvable."
+    exit 1
+fi
+
+log_info "Début du déploiement automatique..."
+
+if [ -d ".git" ]; then
+    log_info "Récupération du dernier code sur Git..."
+    git pull origin main
+fi
+
+log_info "Arrêt de l'ancienne infrastructure..."
+docker compose down
+
+log_info "Construction des conteneurs..."
+docker compose build --no-cache
+log_info "Démarrage de l'ancienne infrastructure..."
+docker compose up -d
+
+
+log_info "Attente de l'initialisation complète de PostgreSQL..."
+until docker compose exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; do
+    echo -n "."
+    sleep 1
+done
+echo ""
+
+log_info "Exécution des migrations Django..."
+docker compose exec -T backend python manage.py migrate --noinput
+
+log_info "Vérification et création du superutilisateur Django..."
+export $(grep -v '^#' .env | xargs)
+
+docker compose exec -T \
+  -e DJANGO_SUPERUSER_USERNAME="${DJANGO_SUPERUSER_USERNAME}" \
+  -e DJANGO_SUPERUSER_EMAIL="${DJANGO_SUPERUSER_EMAIL}" \
+  -e DJANGO_SUPERUSER_PASSWORD="${DJANGO_SUPERUSER_PASSWORD}" \
+  backend python manage.py createsuperuser --noinput || log_info "Le superutilisateur existe déjà ou n'a pas pu être créé (Ignoré)."
+
+log_info "Nettoyage des images Docker obsolètes..."
+docker image prune -f
+
+log_success "Déploiement terminé avec succès ! L'application est en ligne."

@@ -1,0 +1,15 @@
+
+.git
+.gitignore
+
+scripts/
+README.md
+LICENSE
+
+.env
+.env.local
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
