@@ -16,8 +16,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   backend:
-    build:
-      context: ../EinfachPatho_Backend
+    image: ghcr.io/developerrucel07/einfachpatho-backend:latest
 
     container_name: einfachpatho_backend
     command: >
@@ -47,8 +46,7 @@ services:
       - postgres
 
   frontend:
-    build:
-      context: ../EinfachPatho_Frontend
+    image: ghcr.io/developerrucel07/einfachpatho-frontend:latest
     container_name: einfachpatho_frontend
     volumes:
       - ./nginx/nginx_pwa.conf:/etc/nginx/conf.d/default.conf:ro
