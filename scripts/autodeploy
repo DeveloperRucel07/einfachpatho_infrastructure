@@ -13,46 +13,49 @@ log_error() { echo -e "${RED}[ERROR] $1${NC}"; }
 
 
 if [ ! -f "docker-compose.yml" ]; then
-    log_error "Erreur : Le fichier docker-compose.yml est introuvable."
+    log_error "Error: the file docker-compose.yml could not be found."
     exit 1
 fi
 
-log_info "Début du déploiement automatique..."
+log_info "Beginning automatic deployment..."
 
 if [ -d ".git" ]; then
-    log_info "Récupération du dernier code sur Git..."
+    log_info "Fetching the latest code from Git..."
     git pull origin main
 fi
 
-log_info "Arrêt de l'ancienne infrastructure..."
+log_info "Stopping the old infrastructure..."
 docker compose down
 
-log_info "Construction des conteneurs..."
+log_info "Building the containers..."
 docker compose build --no-cache
-log_info "Démarrage de l'ancienne infrastructure..."
+log_info "Starting the new infrastructure..."
 docker compose up -d
 
 
-log_info "Attente de l'initialisation complète de PostgreSQL..."
+log_info "Waiting for PostgreSQL initialization..."
 until docker compose exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; do
     echo -n "."
     sleep 1
 done
 echo ""
 
-log_info "Exécution des migrations Django..."
+log_info "Execution of Django migrations..."
+docker compose exec backend python manage.py makemigrations --noinput
+docker compose exec backend python manage.py makemigrations pathology_app --noinput
+log_info "Applying migrations..."
 docker compose exec -T backend python manage.py migrate --noinput
 
-log_info "Vérification et création du superutilisateur Django..."
+log_info "Verification and creation of Django superuser..."
 export $(grep -v '^#' .env | xargs)
 
 docker compose exec -T \
   -e DJANGO_SUPERUSER_USERNAME="${DJANGO_SUPERUSER_USERNAME}" \
   -e DJANGO_SUPERUSER_EMAIL="${DJANGO_SUPERUSER_EMAIL}" \
   -e DJANGO_SUPERUSER_PASSWORD="${DJANGO_SUPERUSER_PASSWORD}" \
-  backend python manage.py createsuperuser --noinput || log_info "Le superutilisateur existe déjà ou n'a pas pu être créé (Ignoré)."
+  backend python manage.py createsuperuser --noinput || log_info "The superuser already exists or could not be created (Ignored)."
 
-log_info "Nettoyage des images Docker obsolètes..."
+log_info "Cleaning up obsolete Docker images..."
 docker image prune -f
 
-log_success "Déploiement terminé avec succès ! L'application est en ligne."
+log_success "Deployment completed successfully! The application is now live."
