@@ -17,6 +17,14 @@ if [ ! -f "docker-compose.yml" ]; then
     exit 1
 fi
 
+if [ -f ".env" ]; then
+    log_info "Loading environment variables from .env..."
+    set -a
+    # shellcheck disable=SC1091
+    . ./.env
+    set +a
+fi
+
 log_info "Beginning automatic deployment..."
 
 if [ -d ".git" ]; then
@@ -43,11 +51,16 @@ echo ""
 log_info "Execution of Django migrations..."
 docker compose exec backend python manage.py makemigrations --noinput
 docker compose exec backend python manage.py makemigrations pathology_app --noinput
+
+log_info "Applying pre-migration schema fixes..."
+docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
+    -c "ALTER TABLE pathology_app_question ADD COLUMN IF NOT EXISTS question_options jsonb;" \
+    2>/dev/null || true
+
 log_info "Applying migrations..."
 docker compose exec -T backend python manage.py migrate --noinput
 
 log_info "Verification and creation of Django superuser..."
-export $(grep -v '^#' .env | xargs)
 
 docker compose exec -T \
   -e DJANGO_SUPERUSER_USERNAME="${DJANGO_SUPERUSER_USERNAME}" \
