@@ -52,11 +52,6 @@ log_info "Execution of Django migrations..."
 docker compose exec backend python manage.py makemigrations --noinput
 docker compose exec backend python manage.py makemigrations pathology_app --noinput
 
-log_info "Applying pre-migration schema fixes..."
-docker compose exec -T postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
-    -c "ALTER TABLE pathology_app_question ADD COLUMN IF NOT EXISTS question_options jsonb;" \
-    2>/dev/null || true
-
 log_info "Applying migrations..."
 docker compose exec -T backend python manage.py migrate --noinput
 
